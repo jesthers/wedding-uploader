@@ -1,12 +1,43 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Busboy from 'busboy';
-import { getDrive } from './_googleClient';
+import { google } from 'googleapis';
 import { Readable } from 'stream';
 
 export const config = {
   api: { bodyParser: false },
   runtime: 'nodejs',
 };
+
+// ---- Inlined Google OAuth/Drive helpers ----
+function createOAuthClient() {
+  const {
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI,
+    GOOGLE_REFRESH_TOKEN,
+    GOOGLE_DRIVE_PARENT_FOLDER_ID,
+  } = process.env as Record<string, string | undefined>;
+
+  if (
+    !GOOGLE_CLIENT_ID ||
+    !GOOGLE_CLIENT_SECRET ||
+    !GOOGLE_REDIRECT_URI ||
+    !GOOGLE_REFRESH_TOKEN ||
+    !GOOGLE_DRIVE_PARENT_FOLDER_ID
+  ) {
+    throw new Error('Missing Google OAuth env vars');
+  }
+
+  const client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+  client.setCredentials({ refresh_token: GOOGLE_REFRESH_TOKEN });
+  return client;
+}
+
+function getDrive() {
+  const auth = createOAuthClient();
+  return google.drive({ version: 'v3', auth });
+}
+// -------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 1) POST가 아니면 즉시 응답하고 어떤 초기화도 하지 않는다.
@@ -15,7 +46,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 2) POST일 때만 Drive 클라이언트를 준비한다.
-  const drive = getDrive();
+  let drive: any;
+  try {
+    drive = getDrive();
+  } catch (err: any) {
+    console.error('getDrive failed', err);
+    return res.status(500).json({
+      error: 'drive_init_failed',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
   let guestName = '';
   const files: Array<{ filename: string; mime: string; buffer: Buffer }> = [];
 
@@ -40,7 +80,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!guestName) return res.status(400).json({ ok: false, message: 'name is required' });
     if (!files.length) return res.status(400).json({ ok: false, message: 'no files' });
 
-    const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID!;
+    const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID as string | undefined;
+    if (!parentId) {
+      return res.status(500).json({
+        ok: false,
+        message: 'Missing GOOGLE_DRIVE_PARENT_FOLDER_ID',
+      });
+    }
     const folderId = await ensureGuestFolder(drive, parentId, guestName);
 
     await Promise.all(

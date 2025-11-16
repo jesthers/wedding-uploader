@@ -114,25 +114,18 @@ function App() {
       const prepared: PreparedFile[] = await prepareFilesForUpload(toPrepare, MAX_FILES);
       setIsPreparing(false);
 
-      // 업로드
+      // 업로드: 한 번의 요청으로 모두 전송하여 같은 폴더에 업로드되도록 함
       setIsUploading(true);
-      setProgress({ done: 0, total: prepared.length });
-
-      await uploadInBatches(
-        prepared,
-        async (item) => {
-          const form = new FormData();
-          form.append('name', name.trim());
-          form.append('files[]', new File([item.blob], item.name, { type: item.type }));
-          const res = await fetch('/api/upload', { method: 'POST', body: form });
-          if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(txt || '업로드 실패');
-          }
-          setProgress((p) => ({ ...p, done: p.done + 1 }));
-        },
-        UPLOAD_CONCURRENCY,
-      );
+      const form = new FormData();
+      form.append('name', name.trim());
+      prepared.forEach((item) => {
+        form.append('files[]', new File([item.blob], item.name, { type: item.type }));
+      });
+      const res = await fetch('/api/upload', { method: 'POST', body: form });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || '업로드 실패');
+      }
 
       setUploadStatus({ type: 'success', message: '업로드가 완료되었습니다.\n함께해주셔서 감사합니다.' });
       selectedFiles.forEach((f) => URL.revokeObjectURL(f.preview));
@@ -309,7 +302,7 @@ function App() {
           {isPreparing
             ? '사진을 업로드하기 좋게 준비 중입니다…'
             : isUploading
-            ? `${progress.done} / ${progress.total} 업로드 중…`
+            ? '업로드 중입니다... 잠시만 기다려주세요.'
             : '신랑 · 신부에게 전달하기'}
         </button>
       </div>
