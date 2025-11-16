@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 
 export const config = {
   api: { bodyParser: false },
+  runtime: 'nodejs20.x',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
