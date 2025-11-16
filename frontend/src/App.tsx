@@ -263,7 +263,7 @@ function App() {
         {/* Upload hint text (bottom) */}
         <div className="mt-4 mb-4">
           <p className="whitespace-pre-line text-xs text-gray-400 text-center leading-tight">
-            {`신부가 AI와 함께 1시간 만에 완성한 서비스입니다.\n가끔 예민해질 수 있어 사진 업로드만 제공합니다. 영상은 카톡으로 보내주세요!`}
+            {`신부가 AI와 함께 2시간 만에 완성한 서비스입니다.\n가끔 예민해질 수 있어 사진 업로드만 제공합니다.`}
           </p>
         </div>
 
