@@ -8,6 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/node": "^3.0.12",
+    "busboy": "^1.6.0",
+    "googleapis": "^126.0.1",
     "@heroicons/react": "^2.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
