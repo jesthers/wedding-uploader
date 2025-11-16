@@ -18,6 +18,7 @@ function App() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [uploadStatus, setUploadStatus] = useState<{
     type: 'success' | 'error' | null;
     message: string;
@@ -112,17 +113,36 @@ function App() {
       const prepared = await prepareFilesForUpload(toPrepare, MAX_FILES);
       setIsPreparing(false);
 
-      // 업로드: 한 번의 요청으로 모두 전송하여 같은 폴더에 업로드되도록 함
-      setIsUploading(true);
-      const form = new FormData();
-      form.append('name', name.trim());
-      prepared.forEach((item) => {
-        form.append('files[]', new File([item.blob], item.name, { type: item.type }));
+      // Vercel 서버리스 본문 제한(약 4.5~5MB) 회피: 3.5MB 단위로 배치 업로드
+      const MAX_BATCH_BYTES = Math.floor(3.5 * 1024 * 1024);
+      const batches: { items: { name: string; blob: Blob; type: string }[]; totalBytes: number }[] = [];
+      let current: { items: { name: string; blob: Blob; type: string }[]; totalBytes: number } = { items: [], totalBytes: 0 };
+      prepared.forEach((p) => {
+        const size = (p.blob as any).size ?? 0;
+        if (current.items.length > 0 && current.totalBytes + size > MAX_BATCH_BYTES) {
+          batches.push(current);
+          current = { items: [], totalBytes: 0 };
+        }
+        current.items.push(p);
+        current.totalBytes += size;
       });
-      const res = await fetch('/api/upload', { method: 'POST', body: form });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || '업로드 실패');
+      if (current.items.length > 0) batches.push(current);
+
+      setIsUploading(true);
+      setProgress({ done: 0, total: prepared.length });
+
+      for (const b of batches) {
+        const form = new FormData();
+        form.append('name', name.trim());
+        b.items.forEach((item) => {
+          form.append('files[]', new File([item.blob], item.name, { type: item.type }));
+        });
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || '업로드 실패');
+        }
+        setProgress((p) => ({ done: Math.min(p.done + b.items.length, p.total), total: p.total }));
       }
 
       setUploadStatus({ type: 'success', message: '업로드가 완료되었습니다.\n함께해주셔서 감사합니다.' });
@@ -300,7 +320,7 @@ function App() {
           {isPreparing
             ? '사진을 업로드하기 좋게 준비 중입니다…'
             : isUploading
-            ? '업로드 중입니다... 잠시만 기다려주세요.'
+            ? `${progress.done} / ${progress.total} 업로드 중…`
             : '신랑 · 신부에게 전달하기'}
         </button>
       </div>
