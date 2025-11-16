@@ -8,26 +8,31 @@ export const config = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+  // 1) POST가 아니면 즉시 응답하고 어떤 초기화도 하지 않는다.
+  if (req.method !== 'POST') {
+    return res.status(200).send('upload endpoint is alive. use POST.');
+  }
+
+  // 2) POST일 때만 Drive 클라이언트를 준비한다.
   const drive = getDrive();
   let guestName = '';
   const files: Array<{ filename: string; mime: string; buffer: Buffer }> = [];
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const bb = Busboy({ headers: req.headers as any });
-      bb.on('field', (name, val) => {
+      const bb: any = Busboy({ headers: req.headers as any });
+      bb.on('field', (name: string, val: string) => {
         if (name === 'name') guestName = (val || '').trim();
       });
-      bb.on('file', (_name, file, info) => {
+      bb.on('file', (_name: string, file: NodeJS.ReadableStream, info: { filename: string; mimeType: string }) => {
         const chunks: Buffer[] = [];
         file.on('data', (d: Buffer) => chunks.push(d));
         file.on('end', () => {
           files.push({ filename: info.filename, mime: info.mimeType, buffer: Buffer.concat(chunks) });
         });
       });
-      bb.on('error', reject);
-      bb.on('close', resolve);
+      bb.on('error', (err: any) => reject(err));
+      bb.on('close', () => resolve());
       (req as any).pipe(bb);
     });
 
