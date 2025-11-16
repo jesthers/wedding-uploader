@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowUpTrayIcon } from '@heroicons/react/24/outline';
-import { prepareFilesForUpload, uploadInBatches, type PreparedFile } from './utils/prepareFiles';
+import { prepareFilesForUpload } from './utils/prepareFiles';
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE_MB = 20;
-const UPLOAD_CONCURRENCY = 3;
+// 업로드는 서버리스 단일 요청으로 처리
 
 interface SelectedFile {
   file: File;
@@ -18,7 +18,6 @@ function App() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [uploadStatus, setUploadStatus] = useState<{
     type: 'success' | 'error' | null;
     message: string;
@@ -108,10 +107,9 @@ function App() {
 
     try {
       setIsPreparing(true);
-      setProgress({ done: 0, total: 0 });
       // 전처리
       const toPrepare = selectedFiles.map((s) => s.file);
-      const prepared: PreparedFile[] = await prepareFilesForUpload(toPrepare, MAX_FILES);
+      const prepared = await prepareFilesForUpload(toPrepare, MAX_FILES);
       setIsPreparing(false);
 
       // 업로드: 한 번의 요청으로 모두 전송하여 같은 폴더에 업로드되도록 함
