@@ -8,18 +8,19 @@ export async function prepareFilesForUpload(files: File[], limitCount = 20): Pro
   }
 
   const prepared: PreparedFile[] = [];
+  // Vercel 서버리스 요청 본문 제한 대비(여유 포함)
+  const SERVERLESS_MAX_BYTES = Math.floor(3.5 * 1024 * 1024);
 
   for (const f of files) {
     const type = f.type;
     if (type.startsWith('image/')) {
-      const blob = await compressImageToUnderLimit(f, MAX_FILE_BYTES);
+      // 이미지: 서버리스 한도 내로 압축
+      const blob = await compressImageToUnderLimit(f, Math.min(MAX_FILE_BYTES, SERVERLESS_MAX_BYTES));
       const base = f.name.replace(/\.[^/.]+$/, '');
       prepared.push({ name: `${base}.jpg`, blob, type: 'image/jpeg' });
     } else if (type.startsWith('video/')) {
-      if (f.size > MAX_FILE_BYTES) {
-        throw new Error('영상은 20MB 이하만 업로드할 수 있어요. 30초 내 촬영을 권장합니다.');
-      }
-      prepared.push({ name: f.name, blob: f, type });
+      // 영상 업로드 비활성화
+      throw new Error('영상 업로드는 지원하지 않습니다. 사진만 업로드해주세요.');
     } else {
       throw new Error('이미지/영상 파일만 업로드할 수 있어요.');
     }

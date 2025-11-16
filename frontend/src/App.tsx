@@ -92,7 +92,7 @@ function App() {
     }
 
     if (selectedFiles.length === 0) {
-      alert('최소 한 개의 사진 또는 영상을 선택해주세요.');
+      alert('최소 한 개의 사진을 선택해주세요.');
       isValid = false;
     }
 
@@ -113,36 +113,19 @@ function App() {
       const prepared = await prepareFilesForUpload(toPrepare, MAX_FILES);
       setIsPreparing(false);
 
-      // Vercel 서버리스 본문 제한(약 4.5~5MB) 회피: 3.5MB 단위로 배치 업로드
-      const MAX_BATCH_BYTES = Math.floor(3.5 * 1024 * 1024);
-      const batches: { items: { name: string; blob: Blob; type: string }[]; totalBytes: number }[] = [];
-      let current: { items: { name: string; blob: Blob; type: string }[]; totalBytes: number } = { items: [], totalBytes: 0 };
-      prepared.forEach((p) => {
-        const size = (p.blob as any).size ?? 0;
-        if (current.items.length > 0 && current.totalBytes + size > MAX_BATCH_BYTES) {
-          batches.push(current);
-          current = { items: [], totalBytes: 0 };
-        }
-        current.items.push(p);
-        current.totalBytes += size;
-      });
-      if (current.items.length > 0) batches.push(current);
-
+      // 서버리스 본문 한도 회피: 파일 단위로 순차 업로드
       setIsUploading(true);
       setProgress({ done: 0, total: prepared.length });
-
-      for (const b of batches) {
+      for (const item of prepared) {
         const form = new FormData();
         form.append('name', name.trim());
-        b.items.forEach((item) => {
-          form.append('files[]', new File([item.blob], item.name, { type: item.type }));
-        });
+        form.append('files[]', new File([item.blob], item.name, { type: item.type }));
         const res = await fetch('/api/upload', { method: 'POST', body: form });
         if (!res.ok) {
           const txt = await res.text();
           throw new Error(txt || '업로드 실패');
         }
-        setProgress((p) => ({ done: Math.min(p.done + b.items.length, p.total), total: p.total }));
+        setProgress((p) => ({ done: Math.min(p.done + 1, p.total), total: p.total }));
       }
 
       setUploadStatus({ type: 'success', message: '업로드가 완료되었습니다.\n함께해주셔서 감사합니다.' });
@@ -187,7 +170,7 @@ function App() {
           <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 space-y-2 text-sm text-gray-700 leading-relaxed">
             <p className="font-semibold">오늘을 빛내주신 여러분의 시선으로 따뜻한 온기를 담아 나눠주세요.</p>
             <p className="whitespace-pre-line">
-              {`예쁜 장면, 웃음 가득한 순간, 짧은 영상까지 여러분의 시선으로 오늘을 마음껏 담아주세요.\n오늘의 설렘과 웃음이 여러분의 카메라 속에도 오래 남길 바랍니다.`}
+              {`예쁜 장면, 웃음 가득한 순간까지 여러분의 시선으로 오늘을 마음껏 담아주세요.\n오늘의 설렘과 웃음이 여러분의 카메라 속에도 오래 남길 바랍니다.`}
             </p>
           </div>
         </div>
@@ -218,7 +201,7 @@ function App() {
         {/* Photo Upload Section */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            사진·영상
+            사진
           </label>
           <div className="relative pb-8">
             <div
@@ -242,37 +225,23 @@ function App() {
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3 w-full">
-                  {selectedFiles.map((selectedFile) => {
-                    const isVideo = selectedFile.file.type.startsWith('video/');
-                    return (
-                      <div key={selectedFile.id} className="relative aspect-square group">
-                        {isVideo ? (
-                          <video
-                            src={selectedFile.preview}
-                            className="w-full h-full object-cover rounded-xl"
-                            muted
-                            playsInline
-                            loop
-                            autoPlay
-                          />
-                        ) : (
-                          <img
-                            src={selectedFile.preview}
-                            alt="Preview"
-                            className="w-full h-full object-cover rounded-xl"
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(selectedFile.id)}
-                          className="absolute top-1.5 right-1.5 w-7 h-7 bg-gray-900/70 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 active:scale-95 transition"
-                          aria-label="삭제"
-                        >
-                          <span className="text-lg leading-none">×</span>
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {selectedFiles.map((selectedFile) => (
+                    <div key={selectedFile.id} className="relative aspect-square group">
+                      <img
+                        src={selectedFile.preview}
+                        alt="Preview"
+                        className="w-full h-full object-cover rounded-xl"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(selectedFile.id)}
+                        className="absolute top-1.5 right-1.5 w-7 h-7 bg-gray-900/70 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 active:scale-95 transition"
+                        aria-label="삭제"
+                      >
+                        <span className="text-lg leading-none">×</span>
+                      </button>
+                    </div>
+                  ))}
                   {selectedFiles.length < MAX_FILES && (
                     <button
                       type="button"
@@ -294,14 +263,14 @@ function App() {
         {/* Upload hint text (bottom) */}
         <div className="mt-4 mb-4">
           <p className="whitespace-pre-line text-xs text-gray-400 text-center leading-tight">
-            {`신부가 AI와 함께 1시간 만에 완성한 서비스입니다.\n가끔 예민해질 수 있으니 업로드가 안되면 카톡으로 보내주세요!`}
+            {`신부가 AI와 함께 1시간 만에 완성한 서비스입니다.\n가끔 예민해질 수 있어 사진 업로드만 제공합니다. 영상은 카톡으로 보내주세요!`}
           </p>
         </div>
 
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
+          accept="image/*"
           multiple
           onChange={handleFileSelect}
           className="hidden"
